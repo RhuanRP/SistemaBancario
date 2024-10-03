@@ -1,71 +1,93 @@
 import socket
 import threading
 import json
-import time
+from collections import defaultdict
+from threading import Lock, Semaphore
 
-lock = threading.Lock()
-semaphore = threading.Semaphore(7)
+contas = defaultdict(lambda: {"saldo": 0})
+contas_lock = defaultdict(Lock)
+operacoes_lock = Lock()
+semaphore = Semaphore(7)
 
-try:
-    with open('contas.json', 'r') as file:
-        contas = json.load(file)
-except FileNotFoundError:
-    contas = {}
-
-def salvar_contas():
-    with open('contas.json', 'w') as file: 
-        json.dump(contas, file, indent=4) 
-
-def processar_requisicao(cliente_socket):
-    global contas
-
+def carregar_dados():
     try:
-        dados = cliente_socket.recv(1024).decode()
-        operacao = json.loads(dados)
-        resposta = ""
+        with open("contas.json", "r") as file:
+            global contas
+            contas = defaultdict(lambda: {"saldo": 0}, json.load(file))
+    except FileNotFoundError:
+        print("Arquivo de dados não encontrado, iniciando com contas vazias.")
 
-        with semaphore:
-            if operacao['tipo'] == 'deposito':
-                with lock:
-                    contas[operacao['conta']] = contas.get(operacao['conta'], 0) + operacao['valor']
-                    resposta = f"Depósito de {operacao['valor']} na conta {operacao['conta']} realizado com sucesso."
-            elif operacao['tipo'] == 'saque':
-                with lock:
-                    if contas.get(operacao['conta'], 0) >= operacao['valor']:
-                        contas[operacao['conta']] -= operacao['valor']
-                        resposta = f"Saque de {operacao['valor']} da conta {operacao['conta']} realizado com sucesso."
-                    else:
-                        resposta = "Saldo insuficiente."
-            elif operacao['tipo'] == 'consulta':
-                saldo = contas.get(operacao['conta'], 0)
-                resposta = f"Saldo da conta {operacao['conta']}: {saldo}."
-            elif operacao['tipo'] == 'transferencia':
-                with lock:
-                    if contas.get(operacao['conta_origem'], 0) >= operacao['valor']:
-                        contas[operacao['conta_origem']] -= operacao['valor']
-                        contas[operacao['conta_destino']] = contas.get(operacao['conta_destino'], 0) + operacao['valor']
-                        resposta = f"Transferência de {operacao['valor']} da conta {operacao['conta_origem']} para a conta {operacao['conta_destino']} realizada com sucesso."
-                    else:
-                        resposta = "Saldo insuficiente para transferência."
-        
-        salvar_contas()
-        cliente_socket.send(resposta.encode())
-    except Exception as e:
-        cliente_socket.send(f"Erro: {str(e)}".encode())
-    finally:
-        cliente_socket.close()
+def salvar_dados():
+    with open("contas.json", "w") as file:
+        json.dump(contas, file)
 
-def servidor_bancario():
-    servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    servidor.bind(('localhost', 12345))
-    servidor.listen(5)
+def processar_transacoes(cliente_socket, endereco):
+    with semaphore:
+        try:
+            while True:
+                dados = cliente_socket.recv(1024).decode()
+                if not dados:
+                    break
+
+                if dados.lower() == "fim":
+                    print(f"Cliente {endereco} encerrou a conexão.")
+                    break
+                
+                operacao = json.loads(dados)
+                tipo = operacao["tipo"]
+                numero_conta = operacao["numero_conta"]
+
+                with contas_lock[numero_conta]:
+                    if tipo == "deposito":
+                        valor = operacao["valor"]
+                        contas[numero_conta]["saldo"] += valor
+                        resultado = f"Depósito de {valor} realizado com sucesso."
+
+                    elif tipo == "saque":
+                        valor = operacao["valor"]
+                        if contas[numero_conta]["saldo"] >= valor:
+                            contas[numero_conta]["saldo"] -= valor
+                            resultado = f"Saque de {valor} realizado com sucesso."
+                        else:
+                            resultado = f"Saldo insuficiente para saque de {valor}."
+
+                    elif tipo == "consulta":
+                        saldo = contas[numero_conta]["saldo"]
+                        resultado = f"Saldo atual: {saldo}."
+
+                    with operacoes_lock:
+                        print(f"{tipo.capitalize()} na conta {numero_conta} de {endereco}: {resultado}")
+
+                    salvar_dados()
+
+                    cliente_socket.send(resultado.encode())
+
+        except Exception as e:
+            print(f"Erro ao processar transações do cliente {endereco}: {e}")
+        finally:
+            cliente_socket.close()
+            print(f"Conexão com o cliente {endereco} encerrada.")
+
+def iniciar_servidor():
+    carregar_dados()
+    servidor_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    servidor_socket.bind(("localhost", 12345))
+    servidor_socket.listen(5)
     print("Servidor bancário iniciado e aguardando conexões...")
 
-    while True:
-        cliente_socket, endereco = servidor.accept()
-        print(f"Conexão estabelecida com {endereco}")
-        thread = threading.Thread(target=processar_requisicao, args=(cliente_socket,))
-        thread.start()
+    try:
+        while True:
+            cliente_socket, endereco = servidor_socket.accept()
+            print(f"Conexão estabelecida com {endereco}")
+
+            threading.Thread(target=processar_transacoes, args=(cliente_socket, endereco)).start()
+
+    except KeyboardInterrupt:
+        print("Encerrando servidor bancário...")
+    finally:
+        servidor_socket.close()
+        salvar_dados()
+        print("Servidor encerrado.")
 
 if __name__ == "__main__":
-    servidor_bancario()
+    iniciar_servidor()

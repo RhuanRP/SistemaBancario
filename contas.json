@@ -1,12 +1,1 @@
-{
-    "conta_9": 433,
-    "conta_6": 1171,
-    "conta_3": 148,
-    "conta_2": 4242,
-    "conta_4": 1899,
-    "conta_1": 1291,
-    "conta_10": 772,
-    "conta_5": 133,
-    "conta_7": 46,
-    "conta_8": 714
-}
+{"conta_1": {"saldo": 910}, "conta_2": {"saldo": 467}, "conta_3": {"saldo": 548}, "conta_4": {"saldo": 0}, "conta_5": {"saldo": 0}, "conta_6": {"saldo": 165}, "conta_7": {"saldo": 402}, "conta_8": {"saldo": 0}}
