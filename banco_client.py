@@ -3,16 +3,21 @@ import json
 import random
 import time
 import threading
+from pprint import pprint
+from colorama import Fore, Style, init
+
+# Inicializa o colorama para suportar cores no Windows
+init(autoreset=True)
 
 def testar_conexao_servidor(host, port):
     try:
         cliente_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente_socket.connect((host, port))
         cliente_socket.close()
-        print(f"Conexão estabelecida com o servidor no endereço {host}:{port}.")
+        print(f"{Fore.GREEN}Conexão estabelecida com o servidor no endereço {host}:{port}.")
         return True
     except ConnectionRefusedError:
-        print("Erro: Não foi possível conectar ao servidor. Certifique-se de que o servidor está em execução.")
+        print(f"{Fore.RED}Erro: Não foi possível conectar ao servidor. Certifique-se de que o servidor está em execução.")
         return False
 
 def enviar_transacao(tipo, numero_conta, valor=0):
@@ -25,12 +30,16 @@ def enviar_transacao(tipo, numero_conta, valor=0):
             "valor": valor
         }
         
-        cliente_socket.send(json.dumps(transacao).encode())
+        # Formata o JSON de forma mais legível no console
+        print(f"{Fore.YELLOW}Enviando transação para {numero_conta}:")
+        pprint(transacao)
+        
+        cliente_socket.send(json.dumps(transacao, indent=4).encode())
         resposta = cliente_socket.recv(1024).decode()
-        print(f"Resposta do servidor para {numero_conta}: {resposta}")
+        print(f"{Fore.CYAN}Resposta do servidor para {numero_conta}: {resposta}")
         cliente_socket.close()
     except ConnectionRefusedError:
-        print("Erro: não foi possível conectar ao servidor. Certifique-se de que o servidor está em execução.")
+        print(f"{Fore.RED}Erro: não foi possível conectar ao servidor. Certifique-se de que o servidor está em execução.")
 
 def simular_cliente(numero_cliente, num_operacoes):
     numero_conta = f"conta_{numero_cliente}"
@@ -38,7 +47,7 @@ def simular_cliente(numero_cliente, num_operacoes):
         operacao = random.choice(["deposito", "saque", "consulta"])
         valor = random.randint(10, 1000) if operacao in ["deposito", "saque"] else 0
         enviar_transacao(operacao, numero_conta, valor)
-        time.sleep(random.uniform(0.1, 0.8))
+        time.sleep(random.uniform(0.1, 1.0))
 
 def iniciar_clientes(numero_clientes, num_operacoes):
     threads = []
@@ -59,4 +68,4 @@ if __name__ == "__main__":
         num_operacoes = int(input("Digite o número de operações por cliente:  "))
         iniciar_clientes(num_clientes, num_operacoes)
     else:
-        print("Servidor indisponível.")
+        print(f"{Fore.RED}Servidor indisponível.")
