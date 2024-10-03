@@ -9,7 +9,7 @@ print_lock = threading.Lock()
 def realizar_operacao(tipo, conta, valor=0, conta_destino=None):
     try:
         cliente_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cliente_socket.settimeout(20)
+        cliente_socket.settimeout(10)
         cliente_socket.connect(('localhost', 12345))
 
         operacao = {
@@ -59,12 +59,13 @@ def cliente_bancario(num_clientes, num_transacoes):
                 threads.append(thread)
                 thread.start()
 
-            time.sleep(random.uniform(0.1, 0.5))
+            time.sleep(random.uniform(0.1, 0.5)) 
 
     for thread in threads:
         thread.join()
 
 if __name__ == "__main__":
-    num_clientes = 3  
-    num_transacoes = 4  
+    num_clientes = int(input("Digite o número de clientes: "))
+    num_transacoes = int(input("Digite o número de transações por cliente: "))
+    
     cliente_bancario(num_clientes, num_transacoes)
